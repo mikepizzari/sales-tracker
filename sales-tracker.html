@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales WIP Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+<style>
+  @media print {
+    #sidebar,.no-print{display:none!important}
+    #main-content{margin-left:0!important}
+    .section{display:block!important;page-break-inside:avoid}
+    .chart-wrap{height:260px}
+  }
+  .chart-wrap{position:relative;height:300px}
+  .nav-active{background:rgba(255,255,255,.18);border-right:3px solid #a5b4fc}
+  input[type=number]::-webkit-inner-spin-button{opacity:1}
+  .fade-in{animation:fadeIn .2s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-thumb{background:#c7d2fe;border-radius:3px}
+</style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+<!-- Loading -->
+<div id="loading" class="hidden fixed inset-0 bg-black/40 z-[100] flex items-center justify-center">
+  <div class="bg-white rounded-xl p-5 flex items-center gap-3 shadow-xl">
+    <svg class="animate-spin h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12 0 12 0v4a8 8 0 00-8 8H0c0-6.627 5.373-12 12-12"/>
+    </svg>
+    <span class="text-gray-700 font-medium">Loading…</span>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed bottom-5 right-5 z-[90] px-4 py-3 rounded-lg text-white text-sm font-medium shadow-xl transition-all max-w-xs"></div>
+
+<!-- ======================== AUTH SCREEN ======================== -->
+<div id="auth-screen" class="min-h-screen bg-gradient-to-br from-indigo-900 via-indigo-800 to-blue-900 flex items-center justify-center p-4">
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 bg-white/10 rounded-2xl mb-4">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+      <h1 class="text-3xl font-bold text-white">Sales WIP Tracker</h1>
+      <p class="text-indigo-200 mt-2">Pipeline · Revenue · Forecasting</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow-2xl p-8">
+      <p class="text-gray-600 text-sm text-center mb-6">Sign in with Google to access your team's sales data stored securely in Google Sheets.</p>
+      <button id="auth-btn" onclick="handleSignIn()" disabled
+        class="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+          <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Sign in with Google
+      </button>
+      <p id="auth-status" class="text-center text-xs text-gray-400 mt-2">Loading Google APIs…</p>
+      <div id="auth-error" class="hidden mt-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3"></div>
+      <!-- Setup Instructions -->
+      <details class="mt-6">
+        <summary class="text-xs text-indigo-600 cursor-pointer font-medium hover:text-indigo-800">▶ First-time setup instructions</summary>
+        <ol class="mt-3 text-xs text-gray-600 space-y-2 list-decimal list-inside leading-relaxed">
+          <li>Go to <strong>console.cloud.google.com</strong> → New Project (No organization needed)</li>
+          <li>APIs &amp; Services → Library → Enable <strong>Google Sheets API</strong></li>
+          <li>Credentials → Create OAuth 2.0 Client ID (Web App) → add <code class="bg-gray-100 px-1 rounded">null</code> to Authorized Origins</li>
+          <li>Create an <strong>API Key</strong>, restrict it to Sheets API</li>
+          <li>Create a Google Sheet, rename tab 1 to <strong>Deals</strong>, share with team (Editor)</li>
+          <li>Copy Sheet ID from URL (between <code class="bg-gray-100 px-1 rounded">/d/</code> and <code class="bg-gray-100 px-1 rounded">/edit</code>)</li>
+          <li>Open this file in a text editor, find <strong>CONFIG</strong> at top of script, fill in the three values</li>
+        </ol>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== MAIN APP ======================== -->
+<div id="main-app" class="hidden h-screen flex overflow-hidden">
+
+  <!-- Sidebar -->
+  <nav id="sidebar" class="w-60 bg-indigo-900 text-white flex flex-col flex-shrink-0 no-print">
+    <div class="p-4 border-b border-indigo-700">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-xs font-bold" id="user-avatar">?</div>
+        <div class="overflow-hidden">
+          <div id="user-name" class="text-sm font-semibold truncate">User</div>
+          <div class="text-indigo-300 text-xs">Sales Tracker</div>
+        </div>
+      </div>
+    </div>
+    <div class="flex-1 py-3 space-y-0.5">
+      <button onclick="showSection('dashboard')" data-nav="dashboard" class="nav-btn nav-active w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors text-left">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Dashboard
+      </button>
+      <button onclick="showSection('deals')" data-nav="deals" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors text-left">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Deals
+      </button>
+      <button onclick="showSection('wip')" data-nav="wip" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors text-left">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+        WIP Timeline
+      </button>
+      <button onclick="showSection('forecast')" data-nav="forecast" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors text-left">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        Forecast
+      </button>
+      <button onclick="showSection('export')" data-nav="export" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors text-left">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export
+      </button>
+    </div>
+    <div class="p-3 border-t border-indigo-700">
+      <button onclick="handleSignOut()" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors rounded-lg text-indigo-200">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        Sign Out
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main id="main-content" class="flex-1 overflow-auto">
+
+    <!-- DASHBOARD -->
+    <section id="section-dashboard" class="section p-6 fade-in">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Closed Won YTD</div>
+          <div id="kpi-ytd" class="text-2xl font-bold text-gray-900 mt-1">$0</div>
+          <div class="text-xs text-gray-400 mt-1" id="kpi-ytd-sub">0 deals</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pipeline Value</div>
+          <div id="kpi-pipeline" class="text-2xl font-bold text-amber-600 mt-1">$0</div>
+          <div class="text-xs text-gray-400 mt-1" id="kpi-pipeline-sub">0 deals</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Avg Deal Size</div>
+          <div id="kpi-avg" class="text-2xl font-bold text-gray-900 mt-1">$0</div>
+          <div class="text-xs text-gray-400 mt-1">Closed Won</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Win Rate</div>
+          <div id="kpi-winrate" class="text-2xl font-bold text-green-600 mt-1">0%</div>
+          <div class="text-xs text-gray-400 mt-1">Won / (Won + Lost)</div>
+        </div>
+      </div>
+      <!-- Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">Monthly Closed Won (Last 12 Months)</h3>
+          <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">Pipeline by Region</h3>
+          <div class="chart-wrap"><canvas id="chart-region"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEALS -->
+    <section id="section-deals" class="section hidden p-6 fade-in">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold text-gray-900">Deals</h2>
+        <button onclick="openDealForm()" class="no-print bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Add Deal
+        </button>
+      </div>
+      <!-- Filters -->
+      <div class="no-print bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4 flex flex-wrap gap-3 items-center">
+        <input id="filter-search" oninput="renderDealsTable()" type="text" placeholder="Search deals…" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <select id="filter-status" onchange="renderDealsTable()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          <option value="all">All Statuses</option>
+          <option value="Pipeline">Pipeline</option>
+          <option value="Closed Won">Closed Won</option>
+          <option value="Closed Lost">Closed Lost</option>
+        </select>
+        <select id="filter-region" onchange="renderDealsTable()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          <option value="all">All Regions</option>
+          <option>Northeast</option><option>Southeast</option><option>Midwest</option>
+          <option>West</option><option>Southwest</option><option>International</option>
+        </select>
+        <span id="deals-count" class="text-sm text-gray-400 ml-auto"></span>
+      </div>
+      <!-- Table -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onclick="sortDeals('customerName')">Customer <span class="sort-icon" data-col="customerName"></span></th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-600">Project</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onclick="sortDeals('region')">Region <span class="sort-icon" data-col="region"></span></th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onclick="sortDeals('status')">Status <span class="sort-icon" data-col="status"></span></th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onclick="sortDeals('closeDate')">Close Date <span class="sort-icon" data-col="closeDate"></span></th>
+                <th class="text-right px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onclick="sortDeals('tcv')">TCV <span class="sort-icon" data-col="tcv"></span></th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-600">Terms</th>
+                <th class="text-center px-4 py-3 font-semibold text-gray-600 no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="deals-tbody"></tbody>
+          </table>
+        </div>
+        <div id="deals-empty" class="hidden py-16 text-center text-gray-400">
+          <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p class="font-medium">No deals found</p>
+          <p class="text-sm mt-1">Try adjusting your filters or add a new deal.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- WIP TIMELINE -->
+    <section id="section-wip" class="section hidden p-6 fade-in">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">WIP Timeline</h2>
+      <p class="text-gray-500 text-sm mb-6">Work placement by month — Closed Won (confirmed) vs Pipeline (projected). Use this to understand future workload and revenue recognition timing.</p>
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6">
+        <div class="chart-wrap" style="height:360px"><canvas id="chart-wip"></canvas></div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+              <th class="text-left px-4 py-3 font-semibold text-gray-600">Month</th>
+              <th class="text-right px-4 py-3 font-semibold text-indigo-600">Closed Won WIP</th>
+              <th class="text-right px-4 py-3 font-semibold text-amber-500">Pipeline WIP</th>
+              <th class="text-right px-4 py-3 font-semibold text-gray-600">Total WIP</th>
+            </tr>
+          </thead>
+          <tbody id="wip-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- FORECAST -->
+    <section id="section-forecast" class="section hidden p-6 fade-in">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-2xl font-bold text-gray-900">Sales Forecast</h2>
+        <div class="no-print flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-1">
+          <button onclick="setLookback(3)" data-lb="3" class="lb-btn px-3 py-1 text-xs font-semibold rounded-md transition-colors">3-Month</button>
+          <button onclick="setLookback(6)" data-lb="6" class="lb-btn px-3 py-1 text-xs font-semibold rounded-md transition-colors">6-Month</button>
+          <button onclick="setLookback(12)" data-lb="12" class="lb-btn px-3 py-1 text-xs font-semibold rounded-md bg-indigo-600 text-white">12-Month</button>
+        </div>
+      </div>
+      <p class="text-gray-500 text-sm mb-6">Historical actuals, trailing average baseline, and pipeline-adjusted projection.</p>
+      <div id="forecast-summary" class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6 text-sm text-indigo-800"></div>
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6">
+        <div class="chart-wrap" style="height:360px"><canvas id="chart-forecast"></canvas></div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+              <th class="text-left px-4 py-3 font-semibold text-gray-600">Month</th>
+              <th class="text-right px-4 py-3 font-semibold text-indigo-600">Actual Closed Won</th>
+              <th class="text-right px-4 py-3 font-semibold text-green-600">Trailing Avg Forecast</th>
+              <th class="text-right px-4 py-3 font-semibold text-amber-600">Pipeline-Adjusted</th>
+            </tr>
+          </thead>
+          <tbody id="forecast-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- EXPORT -->
+    <section id="section-export" class="section hidden p-6 fade-in">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Export</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">Print / PDF</h3>
+          <p class="text-sm text-gray-500 mb-4">Print this page or save as PDF using your browser's print dialog. Sidebars and buttons are hidden automatically.</p>
+          <button onclick="window.print()" class="w-full bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 rounded-lg transition-colors">Print / Save as PDF</button>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">Export CSV</h3>
+          <p class="text-sm text-gray-500 mb-4">Download all deals as a CSV file. Import into Excel, Google Sheets, or any BI tool.</p>
+          <button onclick="exportCSV()" class="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors">Download CSV</button>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">HTML Snapshot</h3>
+          <p class="text-sm text-gray-500 mb-4">Generate a self-contained HTML report with all data embedded. Share via email or file — no login required to view.</p>
+          <button onclick="exportSnapshot()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors">Generate Snapshot</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ======================== DEAL FORM MODAL ======================== -->
+<div id="deal-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-6 border-b border-gray-100">
+      <h3 id="deal-modal-title" class="text-lg font-bold text-gray-900">Add Deal</h3>
+      <button onclick="closeDealForm()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="deal-form" onsubmit="saveDealForm(event)" class="p-6 space-y-4">
+      <input type="hidden" id="f-id">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Customer Name *</label>
+        <input id="f-customer" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="Acme Corp">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Project Description *</label>
+        <textarea id="f-description" required rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" placeholder="Brief description of the project or service…"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Region</label>
+          <select id="f-region" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option>Northeast</option><option>Southeast</option><option>Midwest</option>
+            <option>West</option><option>Southwest</option><option>International</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Deal Status</label>
+          <select id="f-status" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="Pipeline">Pipeline</option>
+            <option value="Closed Won">Closed Won</option>
+            <option value="Closed Lost">Closed Lost</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Close Date *</label>
+          <input id="f-closedate" type="month" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Total Contract Value *</label>
+          <input id="f-tcv" type="number" min="0" step="0.01" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="100000">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Contract Terms</label>
+        <select id="f-terms" onchange="handleTermsChange()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          <option value="5050">50/50 — Half upfront, half remaining</option>
+          <option value="4060">40/60 — 40% upfront, 60% remaining</option>
+          <option value="3070">30/70 — 30% upfront, 70% remaining</option>
+          <option value="custom">Custom — Set percentages manually</option>
+          <option value="tm">T&amp;M — Time &amp; Material (fully manual)</option>
+        </select>
+      </div>
+      <div id="custom-pct-row" class="hidden grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Upfront %</label>
+          <input id="f-upfront-pct" type="number" min="0" max="100" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="40" oninput="validateCustomPct()">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Remaining %</label>
+          <input id="f-remaining-pct" type="number" min="0" max="100" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="60" oninput="validateCustomPct()">
+        </div>
+        <div class="col-span-2">
+          <p id="custom-pct-error" class="text-xs text-red-500 hidden">Percentages must sum to 100.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeDealForm()" class="flex-1 border border-gray-200 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+        <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors">Save &amp; Set Time Phasing →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ======================== TIME PHASING MODAL ======================== -->
+<div id="phase-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
+      <div>
+        <h3 class="text-lg font-bold text-gray-900">Time Phasing</h3>
+        <p id="phase-subtitle" class="text-sm text-gray-500 mt-0.5"></p>
+      </div>
+      <button onclick="closePhaseModal()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="phase-info" class="px-6 py-3 bg-indigo-50 border-b border-indigo-100 flex-shrink-0 text-sm text-indigo-800"></div>
+    <div class="flex-1 overflow-y-auto p-6">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-200">
+            <th class="text-left pb-2 font-semibold text-gray-600">Month</th>
+            <th class="text-right pb-2 font-semibold text-gray-600">Amount ($)</th>
+            <th class="text-right pb-2 font-semibold text-gray-600">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="phase-tbody"></tbody>
+      </table>
+    </div>
+    <div class="p-6 border-t border-gray-100 flex-shrink-0">
+      <div id="phase-totals" class="grid grid-cols-4 gap-3 mb-4 text-xs text-center">
+        <div class="bg-gray-50 rounded-lg p-2"><div class="text-gray-400 font-medium">Auto-placed</div><div id="pt-auto" class="font-bold text-gray-700 mt-0.5">$0</div></div>
+        <div class="bg-gray-50 rounded-lg p-2"><div class="text-gray-400 font-medium">Manually placed</div><div id="pt-manual" class="font-bold text-gray-700 mt-0.5">$0</div></div>
+        <div class="bg-gray-50 rounded-lg p-2"><div class="text-gray-400 font-medium">Total placed</div><div id="pt-total" class="font-bold text-gray-700 mt-0.5">$0</div></div>
+        <div class="bg-amber-50 rounded-lg p-2"><div class="text-amber-600 font-medium">Remaining</div><div id="pt-remaining" class="font-bold text-amber-700 mt-0.5">$0</div></div>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="closePhaseModal()" class="flex-1 border border-gray-200 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition-colors">Close Without Saving</button>
+        <button onclick="savePhasing()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors">Save Time Phasing</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== CONFIRM DIALOG ======================== -->
+<div id="confirm-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <h3 class="text-lg font-bold text-gray-900 mb-2">Delete Deal</h3>
+    <p id="confirm-msg" class="text-sm text-gray-600 mb-6"></p>
+    <div class="flex gap-3">
+      <button onclick="closeConfirm()" class="flex-1 border border-gray-200 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50">Cancel</button>
+      <button id="confirm-ok" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 rounded-lg transition-colors">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// CONFIG — Fill in your values here
+// =====================================================================
+const CONFIG = {
+  CLIENT_ID: '209129998110-kevo9m5aurt9ep96g9lsbqmkt832f2i5.apps.googleusercontent.com',
+  API_KEY: 'AIzaSyBQ_-3qxzW22OjBRNtIFyB4AlzsdXe7CBE',
+  SPREADSHEET_ID: '1hSRIWAckkQmjkWIM_102lUXJ1T110eci7kIrL9ZVc_M',
+  SHEET_NAME: 'Deals'
+};
+
+// =====================================================================
+// STATE
+// =====================================================================
+const state = {
+  user: null,
+  deals: [],
+  editingDeal: null,
+  phasingDeal: null,
+  sortCol: 'closeDate',
+  sortAsc: false,
+  forecastLookback: 12,
+  charts: {}
+};
+
+let gapiInited = false;
+let gisInited = false;
+let tokenClient;
+
+// =====================================================================
+// GOOGLE AUTH
+// =====================================================================
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  document.getElementById('auth-status').textContent = 'Initialization failed.';
+  document.getElementById('auth-status').className = 'text-center text-xs text-red-500 mt-2';
+}
+
+function gapiLoaded() {
+  gapi.load('client', async () => {
+    try {
+      await gapi.client.init({
+        apiKey: CONFIG.API_KEY,
+        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+      });
+      gapiInited = true;
+      checkReady();
+    } catch(e) {
+      console.error('GAPI init error', e);
+      showAuthError('Google API failed to initialize: ' + (e.details || e.message || JSON.stringify(e)) + '. Check your API Key and that the Sheets API is enabled.');
+    }
+  });
+}
+
+function gisLoaded() {
+  try {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CONFIG.CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      callback: '',
+    });
+    gisInited = true;
+    checkReady();
+  } catch(e) {
+    console.error('GIS init error', e);
+    showAuthError('Google Sign-In failed to initialize: ' + (e.message || JSON.stringify(e)) + '. Check your Client ID and authorized origins.');
+  }
+}
+
+function checkReady() {
+  if (gapiInited && gisInited) {
+    document.getElementById('auth-btn').disabled = false;
+    document.getElementById('auth-status').textContent = 'Ready — click to sign in.';
+    document.getElementById('auth-status').className = 'text-center text-xs text-green-600 mt-2';
+  }
+}
+
+function handleSignIn() {
+  tokenClient.callback = async (resp) => {
+    if (resp.error) { showToast('Authentication failed: ' + resp.error, 'error'); return; }
+    // Get user info
+    try {
+      const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token }
+      });
+      state.user = await r.json();
+      document.getElementById('user-name').textContent = state.user.name || state.user.email || 'User';
+      document.getElementById('user-avatar').textContent = (state.user.name || 'U').charAt(0).toUpperCase();
+    } catch(e) { state.user = { name: 'User' }; }
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.remove('hidden');
+    await ensureHeaders();
+    await loadDeals();
+    renderAll();
+  };
+  if (gapi.client.getToken() === null) {
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  } else {
+    tokenClient.requestAccessToken({ prompt: '' });
+  }
+}
+
+function handleSignOut() {
+  const token = gapi.client.getToken();
+  if (token) google.accounts.oauth2.revoke(token.access_token);
+  gapi.client.setToken('');
+  state.user = null;
+  state.deals = [];
+  document.getElementById('main-app').classList.add('hidden');
+  document.getElementById('auth-screen').classList.remove('hidden');
+}
+
+// =====================================================================
+// GOOGLE SHEETS API
+// =====================================================================
+async function ensureHeaders() {
+  try {
+    const r = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      range: `${CONFIG.SHEET_NAME}!A1:L1`
+    });
+    if (!r.result.values || !r.result.values.length) {
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: CONFIG.SPREADSHEET_ID,
+        range: `${CONFIG.SHEET_NAME}!A1`,
+        valueInputOption: 'RAW',
+        resource: { values: [['id','customerName','projectDescription','region','status','closeDate','tcv','contractTermsType','upfrontPct','placements','createdAt','updatedAt']] }
+      });
+    }
+  } catch(e) { console.warn('ensureHeaders error', e); }
+}
+
+async function loadDeals() {
+  showLoading(true);
+  try {
+    const r = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      range: `${CONFIG.SHEET_NAME}!A:L`
+    });
+    const rows = r.result.values || [];
+    state.deals = rows.slice(1).filter(row => row[0]).map(row => ({
+      id: row[0] || '',
+      customerName: row[1] || '',
+      projectDescription: row[2] || '',
+      region: row[3] || '',
+      status: row[4] || '',
+      closeDate: row[5] || '',
+      tcv: parseFloat(row[6]) || 0,
+      contractTermsType: row[7] || 'tm',
+      upfrontPct: parseFloat(row[8]) || 0,
+      placements: safeJSON(row[9], []),
+      createdAt: row[10] || '',
+      updatedAt: row[11] || ''
+    }));
+  } catch(e) { showToast('Error loading data: ' + (e.result?.error?.message || e.message || e), 'error'); }
+  finally { showLoading(false); }
+}
+
+async function saveAllDeals() {
+  showLoading(true);
+  try {
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      range: `${CONFIG.SHEET_NAME}!A2:L`
+    });
+    if (state.deals.length) {
+      const rows = state.deals.map(d => [
+        d.id, d.customerName, d.projectDescription, d.region, d.status,
+        d.closeDate, d.tcv, d.contractTermsType, d.upfrontPct,
+        JSON.stringify(d.placements), d.createdAt, d.updatedAt
+      ]);
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: CONFIG.SPREADSHEET_ID,
+        range: `${CONFIG.SHEET_NAME}!A2`,
+        valueInputOption: 'RAW',
+        resource: { values: rows }
+      });
+    }
+    showToast('Saved!', 'success');
+  } catch(e) { showToast('Save error: ' + (e.result?.error?.message || e.message || e), 'error'); }
+  finally { showLoading(false); }
+}
+
+// =====================================================================
+// DEAL FORM
+// =====================================================================
+function openDealForm(deal = null) {
+  state.editingDeal = deal;
+  document.getElementById('deal-modal-title').textContent = deal ? 'Edit Deal' : 'Add Deal';
+  document.getElementById('f-id').value = deal?.id || '';
+  document.getElementById('f-customer').value = deal?.customerName || '';
+  document.getElementById('f-description').value = deal?.projectDescription || '';
+  document.getElementById('f-region').value = deal?.region || 'Northeast';
+  document.getElementById('f-status').value = deal?.status || 'Pipeline';
+  document.getElementById('f-closedate').value = deal?.closeDate || '';
+  document.getElementById('f-tcv').value = deal?.tcv || '';
+  document.getElementById('f-terms').value = deal?.contractTermsType || '5050';
+  document.getElementById('f-upfront-pct').value = deal ? (deal.contractTermsType === 'custom' ? deal.upfrontPct : '') : '';
+  document.getElementById('f-remaining-pct').value = deal ? (deal.contractTermsType === 'custom' ? (100 - deal.upfrontPct) : '') : '';
+  handleTermsChange();
+  document.getElementById('deal-modal').classList.remove('hidden');
+}
+
+function closeDealForm() { document.getElementById('deal-modal').classList.add('hidden'); }
+
+function handleTermsChange() {
+  const v = document.getElementById('f-terms').value;
+  document.getElementById('custom-pct-row').classList.toggle('hidden', v !== 'custom');
+}
+
+function validateCustomPct() {
+  const u = parseFloat(document.getElementById('f-upfront-pct').value) || 0;
+  const r = parseFloat(document.getElementById('f-remaining-pct').value) || 0;
+  const err = document.getElementById('custom-pct-error');
+  if (Math.abs(u + r - 100) > 0.01) { err.classList.remove('hidden'); return false; }
+  err.classList.add('hidden'); return true;
+}
+
+async function saveDealForm(e) {
+  e.preventDefault();
+  const termsType = document.getElementById('f-terms').value;
+  if (termsType === 'custom' && !validateCustomPct()) return;
+
+  const tcv = parseFloat(document.getElementById('f-tcv').value) || 0;
+  const closeDate = document.getElementById('f-closedate').value;
+  let upfrontPct = 0;
+  if (termsType === '5050') upfrontPct = 50;
+  else if (termsType === '4060') upfrontPct = 40;
+  else if (termsType === '3070') upfrontPct = 30;
+  else if (termsType === 'custom') upfrontPct = parseFloat(document.getElementById('f-upfront-pct').value) || 0;
+
+  const now = new Date().toISOString();
+  const id = document.getElementById('f-id').value || genId();
+  const existing = state.deals.find(d => d.id === id);
+
+  // Build placements: keep existing manual placements, update/add upfront
+  let placements = existing ? [...existing.placements] : [];
+  if (termsType !== 'tm') {
+    const [y, m] = closeDate.split('-').map(Number);
+    const upfrontAmt = +(tcv * upfrontPct / 100).toFixed(2);
+    // Remove old upfront entry, add new
+    placements = placements.filter(p => !p.isUpfront);
+    if (upfrontAmt > 0) placements.push({ year: y, month: m, amount: upfrontAmt, isUpfront: true });
+  } else {
+    placements = placements.filter(p => !p.isUpfront);
+  }
+
+  const deal = {
+    id,
+    customerName: document.getElementById('f-customer').value.trim(),
+    projectDescription: document.getElementById('f-description').value.trim(),
+    region: document.getElementById('f-region').value,
+    status: document.getElementById('f-status').value,
+    closeDate,
+    tcv,
+    contractTermsType: termsType,
+    upfrontPct,
+    placements,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+
+  if (existing) {
+    const idx = state.deals.findIndex(d => d.id === id);
+    state.deals[idx] = deal;
+  } else {
+    state.deals.push(deal);
+  }
+
+  await saveAllDeals();
+  closeDealForm();
+  renderAll();
+  // Open time phasing
+  openPhaseModal(deal);
+}
+
+// =====================================================================
+// TIME PHASING MODAL
+// =====================================================================
+function openPhaseModal(deal) {
+  state.phasingDeal = JSON.parse(JSON.stringify(deal)); // deep copy
+  const tcv = deal.tcv;
+  const [cy, cm] = deal.closeDate.split('-').map(Number);
+  const upfrontAmt = deal.contractTermsType !== 'tm' ? +(tcv * deal.upfrontPct / 100).toFixed(2) : 0;
+  const remaining = +(tcv - upfrontAmt).toFixed(2);
+
+  document.getElementById('phase-subtitle').textContent = `${deal.customerName} — ${fmt(tcv)}`;
+  document.getElementById('phase-info').innerHTML =
+    deal.contractTermsType === 'tm'
+      ? `<strong>T&M</strong>: All ${fmt(tcv)} must be placed manually across months.`
+      : `<strong>${termsLabel(deal.contractTermsType)}</strong>: ${fmt(upfrontAmt)} auto-placed in <strong>${monthLabel(cy, cm)}</strong>. Distribute the remaining <strong>${fmt(remaining)}</strong> manually.`;
+
+  // Generate 24-month grid from closeDate
+  const tbody = document.getElementById('phase-tbody');
+  tbody.innerHTML = '';
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(cy, cm - 1 + i);
+    const yr = d.getFullYear(), mo = d.getMonth() + 1;
+    const isUpfrontMonth = (i === 0 && deal.contractTermsType !== 'tm');
+    const existing = deal.placements.find(p => p.year === yr && p.month === mo && !p.isUpfront);
+    const autoEntry = deal.placements.find(p => p.year === yr && p.month === mo && p.isUpfront);
+    const autoVal = autoEntry ? autoEntry.amount : 0;
+
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-100 hover:bg-gray-50';
+    tr.innerHTML = `
+      <td class="py-2 px-2 text-sm text-gray-700">${monthLabel(yr, mo)}</td>
+      <td class="py-2 px-2">
+        ${isUpfrontMonth && autoVal > 0
+          ? `<div class="text-right text-sm text-gray-400 bg-gray-50 rounded px-3 py-1.5 border border-dashed border-gray-200">${fmt(autoVal)} <span class="text-xs">(auto)</span></div>`
+          : `<input type="number" min="0" step="0.01" data-year="${yr}" data-month="${mo}"
+              value="${existing ? existing.amount : ''}"
+              oninput="updatePhaseTotals()"
+              class="w-full text-right border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="0">`
+        }
+      </td>
+      <td class="py-2 px-2 text-xs text-right text-gray-400">${isUpfrontMonth && autoVal > 0 ? 'Upfront' : ''}</td>`;
+    tbody.appendChild(tr);
+  }
+  updatePhaseTotals();
+  document.getElementById('phase-modal').classList.remove('hidden');
+}
+
+function updatePhaseTotals() {
+  const deal = state.phasingDeal;
+  const upfrontAmt = deal.contractTermsType !== 'tm' ? +(deal.tcv * deal.upfrontPct / 100).toFixed(2) : 0;
+  let manualTotal = 0;
+  document.querySelectorAll('#phase-tbody input[data-year]').forEach(inp => {
+    manualTotal += parseFloat(inp.value) || 0;
+  });
+  const total = +(upfrontAmt + manualTotal).toFixed(2);
+  const remaining = +(deal.tcv - total).toFixed(2);
+  document.getElementById('pt-auto').textContent = fmt(upfrontAmt);
+  document.getElementById('pt-manual').textContent = fmt(manualTotal);
+  document.getElementById('pt-total').textContent = fmt(total);
+  document.getElementById('pt-remaining').textContent = fmt(remaining);
+  document.getElementById('pt-remaining').parentElement.className = remaining > 0.01 ? 'bg-amber-50 rounded-lg p-2' : 'bg-green-50 rounded-lg p-2';
+}
+
+async function savePhasing() {
+  const deal = state.phasingDeal;
+  const [cy, cm] = deal.closeDate.split('-').map(Number);
+  const upfrontAmt = deal.contractTermsType !== 'tm' ? +(deal.tcv * deal.upfrontPct / 100).toFixed(2) : 0;
+
+  // Build new placements
+  const placements = [];
+  if (upfrontAmt > 0) placements.push({ year: cy, month: cm, amount: upfrontAmt, isUpfront: true });
+  document.querySelectorAll('#phase-tbody input[data-year]').forEach(inp => {
+    const amt = parseFloat(inp.value) || 0;
+    if (amt > 0) {
+      placements.push({ year: parseInt(inp.dataset.year), month: parseInt(inp.dataset.month), amount: amt, isUpfront: false });
+    }
+  });
+
+  const idx = state.deals.findIndex(d => d.id === deal.id);
+  if (idx >= 0) {
+    state.deals[idx].placements = placements;
+    state.deals[idx].updatedAt = new Date().toISOString();
+  }
+  await saveAllDeals();
+  closePhaseModal();
+  renderAll();
+}
+
+function closePhaseModal() { document.getElementById('phase-modal').classList.add('hidden'); }
+
+// =====================================================================
+// DELETE CONFIRM
+// =====================================================================
+function confirmDelete(id) {
+  const deal = state.deals.find(d => d.id === id);
+  if (!deal) return;
+  document.getElementById('confirm-msg').textContent = `Delete "${deal.customerName} — ${deal.projectDescription}"? This cannot be undone.`;
+  document.getElementById('confirm-ok').onclick = async () => {
+    state.deals = state.deals.filter(d => d.id !== id);
+    await saveAllDeals();
+    closeConfirm();
+    renderAll();
+  };
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+function closeConfirm() { document.getElementById('confirm-modal').classList.add('hidden'); }
+
+// =====================================================================
+// NAVIGATION
+// =====================================================================
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+  document.getElementById('section-' + name).classList.remove('hidden');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-active'));
+  document.querySelector(`[data-nav="${name}"]`).classList.add('nav-active');
+  state.activeSection = name;
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'wip') renderWIP();
+  if (name === 'forecast') renderForecast();
+}
+
+// =====================================================================
+// SORT & FILTER DEALS
+// =====================================================================
+function sortDeals(col) {
+  if (state.sortCol === col) state.sortAsc = !state.sortAsc;
+  else { state.sortCol = col; state.sortAsc = true; }
+  document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+  const icon = document.querySelector(`.sort-icon[data-col="${col}"]`);
+  if (icon) icon.textContent = state.sortAsc ? ' ↑' : ' ↓';
+  renderDealsTable();
+}
+
+function getFilteredDeals() {
+  const search = (document.getElementById('filter-search')?.value || '').toLowerCase();
+  const status = document.getElementById('filter-status')?.value || 'all';
+  const region = document.getElementById('filter-region')?.value || 'all';
+  return state.deals.filter(d => {
+    if (status !== 'all' && d.status !== status) return false;
+    if (region !== 'all' && d.region !== region) return false;
+    if (search && !`${d.customerName} ${d.projectDescription} ${d.region}`.toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a, b) => {
+    let va = a[state.sortCol], vb = b[state.sortCol];
+    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    if (va < vb) return state.sortAsc ? -1 : 1;
+    if (va > vb) return state.sortAsc ? 1 : -1;
+    return 0;
+  });
+}
+
+// =====================================================================
+// RENDER: DEALS TABLE
+// =====================================================================
+function renderDealsTable() {
+  const deals = getFilteredDeals();
+  const tbody = document.getElementById('deals-tbody');
+  const empty = document.getElementById('deals-empty');
+  document.getElementById('deals-count').textContent = `${deals.length} deal${deals.length !== 1 ? 's' : ''}`;
+  if (!deals.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  tbody.innerHTML = deals.map(d => `
+    <tr class="border-b border-gray-100 hover:bg-indigo-50/30 transition-colors">
+      <td class="px-4 py-3 font-medium text-gray-900">${esc(d.customerName)}</td>
+      <td class="px-4 py-3 text-gray-600 max-w-[200px] truncate" title="${esc(d.projectDescription)}">${esc(d.projectDescription)}</td>
+      <td class="px-4 py-3 text-gray-600">${esc(d.region)}</td>
+      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadge(d.status)}">${esc(d.status)}</span></td>
+      <td class="px-4 py-3 text-gray-600">${fmtDate(d.closeDate)}</td>
+      <td class="px-4 py-3 text-right font-semibold text-gray-900">${fmt(d.tcv)}</td>
+      <td class="px-4 py-3 text-gray-500 text-xs">${termsLabel(d.contractTermsType)}</td>
+      <td class="px-4 py-3 no-print">
+        <div class="flex items-center justify-center gap-2">
+          <button onclick="openPhaseModal(state.deals.find(x=>x.id==='${d.id}'))" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Phase</button>
+          <button onclick="openDealForm(state.deals.find(x=>x.id==='${d.id}'))" class="text-xs text-gray-500 hover:text-gray-700 font-medium">Edit</button>
+          <button onclick="confirmDelete('${d.id}')" class="text-xs text-red-400 hover:text-red-600 font-medium">Delete</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// =====================================================================
+// RENDER: DASHBOARD
+// =====================================================================
+function renderDashboard() {
+  const yr = new Date().getFullYear();
+  const won = state.deals.filter(d => d.status === 'Closed Won');
+  const ytd = won.filter(d => d.closeDate?.startsWith(yr));
+  const pipe = state.deals.filter(d => d.status === 'Pipeline');
+  const lost = state.deals.filter(d => d.status === 'Closed Lost');
+
+  document.getElementById('kpi-ytd').textContent = fmt(sum(ytd, 'tcv'));
+  document.getElementById('kpi-ytd-sub').textContent = `${ytd.length} deal${ytd.length !== 1 ? 's' : ''} in ${yr}`;
+  document.getElementById('kpi-pipeline').textContent = fmt(sum(pipe, 'tcv'));
+  document.getElementById('kpi-pipeline-sub').textContent = `${pipe.length} deal${pipe.length !== 1 ? 's' : ''}`;
+  document.getElementById('kpi-avg').textContent = won.length ? fmt(sum(won, 'tcv') / won.length) : '$0';
+  const total = won.length + lost.length;
+  document.getElementById('kpi-winrate').textContent = total ? Math.round(won.length / total * 100) + '%' : '0%';
+
+  // Monthly chart
+  const months = getLast12();
+  const monthly = months.map(m => sum(won.filter(d => d.closeDate === m.key), 'tcv'));
+  renderChart('chart-monthly', 'bar', months.map(m => m.label), [{
+    label: 'Closed Won', data: monthly,
+    backgroundColor: 'rgba(99,102,241,0.8)', borderRadius: 4, borderSkipped: false
+  }]);
+
+  // Region doughnut (pipeline)
+  const regions = ['Northeast','Southeast','Midwest','West','Southwest','International'];
+  const rData = regions.map(r => sum(pipe.filter(d => d.region === r), 'tcv')).filter((v,i) => v > 0 || pipe.some(d => d.region === regions[i]));
+  const rLabels = regions.filter((r,i) => pipe.some(d => d.region === r));
+  const rVals = rLabels.map(r => sum(pipe.filter(d => d.region === r), 'tcv'));
+  const colors = ['#6366f1','#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6'];
+  if (rLabels.length) {
+    renderChart('chart-region', 'doughnut', rLabels, [{
+      data: rVals, backgroundColor: colors.slice(0, rLabels.length), borderWidth: 2
+    }]);
+  }
+}
+
+// =====================================================================
+// RENDER: WIP TIMELINE
+// =====================================================================
+function renderWIP() {
+  const months = getNext24();
+  const won = state.deals.filter(d => d.status === 'Closed Won');
+  const pipe = state.deals.filter(d => d.status === 'Pipeline');
+
+  const wonData = months.map(m => placedIn(won, m.year, m.month));
+  const pipeData = months.map(m => placedIn(pipe, m.year, m.month));
+
+  renderChart('chart-wip', 'bar', months.map(m => m.label), [
+    { label: 'Closed Won WIP', data: wonData, backgroundColor: 'rgba(99,102,241,0.85)', borderRadius: 3, borderSkipped: false },
+    { label: 'Pipeline WIP', data: pipeData, backgroundColor: 'rgba(245,158,11,0.6)', borderRadius: 3, borderSkipped: false }
+  ], { stacked: true });
+
+  // Table
+  const tbody = document.getElementById('wip-tbody');
+  tbody.innerHTML = months.map((m, i) => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50 ${wonData[i]+pipeData[i]===0?'text-gray-300':''}">
+      <td class="px-4 py-2 text-sm">${m.label}</td>
+      <td class="px-4 py-2 text-right text-sm font-medium text-indigo-700">${wonData[i] ? fmt(wonData[i]) : '—'}</td>
+      <td class="px-4 py-2 text-right text-sm font-medium text-amber-600">${pipeData[i] ? fmt(pipeData[i]) : '—'}</td>
+      <td class="px-4 py-2 text-right text-sm font-semibold text-gray-800">${wonData[i]+pipeData[i] ? fmt(wonData[i]+pipeData[i]) : '—'}</td>
+    </tr>`).join('');
+}
+
+// =====================================================================
+// RENDER: FORECAST
+// =====================================================================
+function renderForecast() {
+  const lb = state.forecastLookback;
+  const won = state.deals.filter(d => d.status === 'Closed Won');
+  const pipe = state.deals.filter(d => d.status === 'Pipeline');
+  const lost = state.deals.filter(d => d.status === 'Closed Lost');
+
+  // Historical months (last 12)
+  const hist = getLast12();
+  const actuals = hist.map(m => sum(won.filter(d => d.closeDate === m.key), 'tcv'));
+
+  // Trailing average from last `lb` months of actuals
+  const recentActuals = actuals.slice(-lb);
+  const trailingAvg = recentActuals.length ? recentActuals.reduce((a,b)=>a+b,0)/recentActuals.length : 0;
+
+  // Win rate for pipeline adjustment
+  const totalWL = won.length + lost.length;
+  const winRate = totalWL > 0 ? won.length / totalWL : 0.25;
+  const pipeTotal = sum(pipe, 'tcv');
+  const pipeMonthly = (pipeTotal * winRate) / 12;
+  const adjustedForecast = trailingAvg + pipeMonthly;
+
+  // Future months (next 12)
+  const future = getNext12();
+
+  // Build chart data across 24 months
+  const labels = [...hist.map(m=>m.label), ...future.map(m=>m.label)];
+  const actualData = [...actuals, ...Array(12).fill(null)];
+  const trailingData = [...Array(12).fill(null), ...Array(12).fill(+trailingAvg.toFixed(2))];
+  const adjustedData = [...Array(12).fill(null), ...Array(12).fill(+adjustedForecast.toFixed(2))];
+
+  renderChart('chart-forecast', 'bar', labels, [
+    { label: 'Actual Closed Won', data: actualData, backgroundColor: 'rgba(99,102,241,0.8)', borderRadius: 3, order: 2 },
+    { label: `${lb}-Mo Trailing Avg`, data: trailingData, type: 'line', borderColor: '#10b981', backgroundColor: 'transparent', borderWidth: 2, borderDash: [6,3], pointRadius: 2, tension: 0, order: 1 },
+    { label: 'Pipeline-Adjusted', data: adjustedData, type: 'line', borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 2, borderDash: [3,3], pointRadius: 2, tension: 0, fill: true, order: 0 }
+  ]);
+
+  // Summary text
+  document.getElementById('forecast-summary').innerHTML =
+    `Based on a <strong>${lb}-month trailing average</strong>, your baseline monthly forecast is <strong>${fmt(trailingAvg)}</strong>. ` +
+    `With <strong>${fmt(pipeTotal)}</strong> in active pipeline at a <strong>${Math.round(winRate*100)}%</strong> historical win rate, ` +
+    `the pipeline-adjusted monthly forecast is <strong>${fmt(adjustedForecast)}</strong>.`;
+
+  // Forecast table
+  const tbody = document.getElementById('forecast-tbody');
+  tbody.innerHTML = [...hist.map((m,i) => ({ m, actual: actuals[i], forecast: null, adjusted: null })),
+    ...future.map(m => ({ m, actual: null, forecast: trailingAvg, adjusted: adjustedForecast }))
+  ].map(row => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="px-4 py-2 text-sm text-gray-700">${row.m.label}</td>
+      <td class="px-4 py-2 text-right text-sm font-medium text-indigo-700">${row.actual != null ? fmt(row.actual) : '—'}</td>
+      <td class="px-4 py-2 text-right text-sm text-green-600">${row.forecast != null ? fmt(row.forecast) : '—'}</td>
+      <td class="px-4 py-2 text-right text-sm text-amber-600">${row.adjusted != null ? fmt(row.adjusted) : '—'}</td>
+    </tr>`).join('');
+
+  // Lookback buttons
+  document.querySelectorAll('.lb-btn').forEach(b => {
+    const active = parseInt(b.dataset.lb) === lb;
+    b.className = `lb-btn px-3 py-1 text-xs font-semibold rounded-md transition-colors ${active ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`;
+  });
+}
+
+function setLookback(n) { state.forecastLookback = n; renderForecast(); }
+
+// =====================================================================
+// EXPORT
+// =====================================================================
+function exportCSV() {
+  const headers = ['ID','Customer','Project','Region','Status','Close Date','TCV','Terms','Upfront %'];
+  const rows = state.deals.map(d => [
+    d.id, d.customerName, d.projectDescription, d.region, d.status,
+    d.closeDate, d.tcv, termsLabel(d.contractTermsType), d.upfrontPct
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  download('sales-tracker-export.csv', 'text/csv', csv);
+  showToast('CSV downloaded!', 'success');
+}
+
+function exportSnapshot() {
+  const won = state.deals.filter(d => d.status === 'Closed Won');
+  const pipe = state.deals.filter(d => d.status === 'Pipeline');
+  const months = getNext24();
+  const wonData = months.map(m => placedIn(won, m.year, m.month));
+  const pipeData = months.map(m => placedIn(pipe, m.year, m.month));
+  const hist = getLast12();
+  const actuals = hist.map(m => sum(won.filter(d => d.closeDate === m.key), 'tcv'));
+  const trailingAvg = actuals.slice(-12).reduce((a,b)=>a+b,0)/12;
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Sales WIP Snapshot — ${new Date().toLocaleDateString()}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
+<style>body{font-family:system-ui,sans-serif;background:#f9fafb;color:#1f2937;padding:2rem}
+h1{font-size:1.5rem;font-weight:700;color:#1e1b4b;margin-bottom:0.25rem}
+.sub{color:#6b7280;font-size:.875rem;margin-bottom:2rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1.25rem}
+.kpi-label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af}
+.kpi-val{font-size:1.5rem;font-weight:700;color:#1f2937;margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{background:#f9fafb;padding:.5rem .75rem;text-align:left;font-weight:600;color:#4b5563;border-bottom:2px solid #e5e7eb}
+td{padding:.5rem .75rem;border-bottom:1px solid #f3f4f6}
+.chart-wrap{height:260px;position:relative}
+.badge{display:inline-block;padding:.125rem .5rem;border-radius:9999px;font-size:.75rem;font-weight:600}
+</style></head><body>
+<h1>Sales WIP Snapshot</h1>
+<div class="sub">Generated ${new Date().toLocaleString()}</div>
+<div class="grid">
+<div class="card"><div class="kpi-label">Closed Won YTD</div><div class="kpi-val">${fmt(sum(won.filter(d=>d.closeDate?.startsWith(new Date().getFullYear())), 'tcv'))}</div></div>
+<div class="card"><div class="kpi-label">Pipeline Value</div><div class="kpi-val">${fmt(sum(pipe, 'tcv'))}</div></div>
+</div>
+<div class="card" style="margin-bottom:1.5rem"><h2 style="font-size:1rem;font-weight:600;margin-bottom:.75rem">WIP Timeline</h2>
+<div class="chart-wrap"><canvas id="snap-wip"></canvas></div></div>
+<div class="card" style="margin-bottom:1.5rem"><h2 style="font-size:1rem;font-weight:600;margin-bottom:.75rem">Deals</h2>
+<table><thead><tr><th>Customer</th><th>Project</th><th>Status</th><th>Close</th><th style="text-align:right">TCV</th></tr></thead>
+<tbody>${state.deals.map(d=>`<tr><td>${esc(d.customerName)}</td><td>${esc(d.projectDescription)}</td><td>${d.status}</td><td>${fmtDate(d.closeDate)}</td><td style="text-align:right">${fmt(d.tcv)}</td></tr>`).join('')}</tbody></table></div>
+<script>
+new Chart(document.getElementById('snap-wip'),{type:'bar',data:{labels:${JSON.stringify(months.map(m=>m.label))},datasets:[
+{label:'Closed Won WIP',data:${JSON.stringify(wonData)},backgroundColor:'rgba(99,102,241,0.85)',borderRadius:3},
+{label:'Pipeline WIP',data:${JSON.stringify(pipeData)},backgroundColor:'rgba(245,158,11,0.6)',borderRadius:3}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:v=>'$'+v.toLocaleString()}}}}});
+<\/script></body></html>`;
+
+  download(`sales-snapshot-${new Date().toISOString().slice(0,10)}.html`, 'text/html', html);
+  showToast('Snapshot generated!', 'success');
+}
+
+// =====================================================================
+// CHART HELPER
+// =====================================================================
+function renderChart(id, type, labels, datasets, opts = {}) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (state.charts[id]) { state.charts[id].destroy(); delete state.charts[id]; }
+  state.charts[id] = new Chart(canvas, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw || 0)}` } }
+      },
+      scales: type === 'doughnut' ? {} : {
+        x: { stacked: opts.stacked || false, grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { stacked: opts.stacked || false, ticks: { font: { size: 10 }, callback: v => '$' + (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v) } }
+      }
+    }
+  });
+}
+
+// =====================================================================
+// RENDER ALL
+// =====================================================================
+function renderAll() {
+  renderDealsTable();
+  if (state.activeSection === 'dashboard') renderDashboard();
+  if (state.activeSection === 'wip') renderWIP();
+  if (state.activeSection === 'forecast') renderForecast();
+}
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2); }
+function safeJSON(s, def) { try { return JSON.parse(s); } catch { return def; } }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmt(n) { return '$' + (+(n||0)).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function sum(arr, key) { return arr.reduce((t,d) => t + (d[key]||0), 0); }
+function placedIn(deals, year, month) {
+  return deals.reduce((t,d) => {
+    const p = d.placements.find(p => p.year === year && p.month === month);
+    return t + (p ? p.amount : 0);
+  }, 0);
+}
+function fmtDate(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-').map(Number);
+  return monthLabel(y, m);
+}
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function monthLabel(y, m) { return `${MONTHS[m-1]} ${y}`; }
+function getLast12() {
+  const res = []; const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    res.push({ year: y, month: m, label: monthLabel(y, m), key: `${y}-${String(m).padStart(2,'0')}` });
+  }
+  return res;
+}
+function getNext12() {
+  const res = []; const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    res.push({ year: y, month: m, label: monthLabel(y, m), key: `${y}-${String(m).padStart(2,'0')}` });
+  }
+  return res;
+}
+function getNext24() {
+  const res = []; const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    res.push({ year: y, month: m, label: monthLabel(y, m), key: `${y}-${String(m).padStart(2,'0')}` });
+  }
+  return res;
+}
+function statusBadge(s) {
+  if (s === 'Closed Won') return 'bg-green-100 text-green-700';
+  if (s === 'Closed Lost') return 'bg-red-100 text-red-600';
+  return 'bg-amber-100 text-amber-700';
+}
+function termsLabel(t) {
+  const map = { '5050':'50/50','4060':'40/60','3070':'30/70','custom':'Custom','tm':'T&M' };
+  return map[t] || t || '';
+}
+function showLoading(on) { document.getElementById('loading').classList.toggle('hidden', !on); }
+function showToast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `fixed bottom-5 right-5 z-[90] px-4 py-3 rounded-lg text-white text-sm font-medium shadow-xl transition-all max-w-xs ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 3500);
+}
+function download(filename, mime, content) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  a.download = filename; a.click();
+  URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>
