@@ -6,8 +6,7 @@
 <title>Sales WIP Tracker</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+<!-- Google API scripts loaded dynamically after inline script is parsed -->
 <style>
   @media print {
     #sidebar,.no-print{display:none!important}
@@ -476,15 +475,31 @@ function showAuthError(msg) {
   document.getElementById('auth-status').className = 'text-center text-xs text-red-500 mt-2';
 }
 
-// Timeout: if not ready in 10s, show a diagnostic
+// Load Google API scripts dynamically — guarantees functions are defined before callbacks fire
+function loadGoogleScripts() {
+  const s1 = document.createElement('script');
+  s1.src = 'https://apis.google.com/js/api.js';
+  s1.onload = gapiLoaded;
+  s1.onerror = () => showAuthError('Failed to load Google API script (apis.google.com). Check your network or try disabling browser extensions/ad blockers.');
+  document.head.appendChild(s1);
+
+  const s2 = document.createElement('script');
+  s2.src = 'https://accounts.google.com/gsi/client';
+  s2.onload = gisLoaded;
+  s2.onerror = () => showAuthError('Failed to load Google Sign-In script (accounts.google.com). Check your network or try disabling browser extensions/ad blockers.');
+  document.head.appendChild(s2);
+}
+document.addEventListener('DOMContentLoaded', loadGoogleScripts);
+
+// Timeout: if not ready in 12s, show a diagnostic
 setTimeout(() => {
   if (!gapiInited || !gisInited) {
     const missing = [];
     if (!gapiInited) missing.push('Google API client (gapi)');
     if (!gisInited) missing.push('Google Sign-In (GIS)');
-    showAuthError('Timed out waiting for: ' + missing.join(', ') + '. This is usually an API Key issue or network problem. Open browser DevTools (F12 → Console) for details.');
+    showAuthError('Timed out waiting for: ' + missing.join(', ') + '. Try disabling ad blockers/extensions, or open DevTools (F12 → Console) for details.');
   }
-}, 10000);
+}, 12000);
 
 function gapiLoaded() {
   gapi.load('client', async () => {
