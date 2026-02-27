@@ -440,9 +440,9 @@
 // CONFIG — Fill in your values here
 // =====================================================================
 const CONFIG = {
-  CLIENT_ID: '209129998110-kevo9m5aurt9ep96g9lsbqmkt832f2i5.apps.googleusercontent.com',
-  API_KEY: 'AIzaSyBQ_-3qxzW22OjBRNtIFyB4AlzsdXe7CBE',
-  SPREADSHEET_ID: '1hSRIWAckkQmjkWIM_102lUXJ1T110eci7kIrL9ZVc_M',
+  CLIENT_ID: 'YOUR_CLIENT_ID_HERE',
+  API_KEY: 'YOUR_API_KEY_HERE',
+  SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID_HERE',
   SHEET_NAME: 'Deals'
 };
 
@@ -1002,8 +1002,13 @@ function renderForecast() {
   const trailingAvg = recentActuals.length ? recentActuals.reduce((a,b)=>a+b,0)/recentActuals.length : 0;
 
   // Win rate for pipeline adjustment
+  // Require at least 5 closed deals (won + lost) for a meaningful rate;
+  // otherwise fall back to a conservative 25% default.
   const totalWL = won.length + lost.length;
-  const winRate = totalWL > 0 ? won.length / totalWL : 0.25;
+  const MIN_DEALS_FOR_RATE = 5;
+  const hasEnoughData = totalWL >= MIN_DEALS_FOR_RATE;
+  const winRate = hasEnoughData ? won.length / totalWL : 0.25;
+  const winRateSource = hasEnoughData ? `${Math.round(winRate*100)}% historical (${won.length}W / ${lost.length}L)` : `25% default (need ${MIN_DEALS_FOR_RATE - totalWL} more closed deals for historical rate)`;
   const pipeTotal = sum(pipe, 'tcv');
   const pipeMonthly = (pipeTotal * winRate) / 12;
   const adjustedForecast = trailingAvg + pipeMonthly;
@@ -1026,7 +1031,7 @@ function renderForecast() {
   // Summary text
   document.getElementById('forecast-summary').innerHTML =
     `Based on a <strong>${lb}-month trailing average</strong>, your baseline monthly forecast is <strong>${fmt(trailingAvg)}</strong>. ` +
-    `With <strong>${fmt(pipeTotal)}</strong> in active pipeline at a <strong>${Math.round(winRate*100)}%</strong> historical win rate, ` +
+    `With <strong>${fmt(pipeTotal)}</strong> in active pipeline at a <strong>${winRateSource}</strong>, ` +
     `the pipeline-adjusted monthly forecast is <strong>${fmt(adjustedForecast)}</strong>.`;
 
   // Forecast table
