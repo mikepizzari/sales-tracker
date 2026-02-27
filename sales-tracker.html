@@ -476,13 +476,22 @@ function showAuthError(msg) {
   document.getElementById('auth-status').className = 'text-center text-xs text-red-500 mt-2';
 }
 
+// Timeout: if not ready in 10s, show a diagnostic
+setTimeout(() => {
+  if (!gapiInited || !gisInited) {
+    const missing = [];
+    if (!gapiInited) missing.push('Google API client (gapi)');
+    if (!gisInited) missing.push('Google Sign-In (GIS)');
+    showAuthError('Timed out waiting for: ' + missing.join(', ') + '. This is usually an API Key issue or network problem. Open browser DevTools (F12 → Console) for details.');
+  }
+}, 10000);
+
 function gapiLoaded() {
   gapi.load('client', async () => {
     try {
-      await gapi.client.init({
-        apiKey: CONFIG.API_KEY,
-        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
-      });
+      // Init with API key only (no discoveryDocs — load separately, more reliable)
+      gapi.client.setApiKey(CONFIG.API_KEY);
+      await gapi.client.load('https://sheets.googleapis.com/$discovery/rest?version=v4');
       gapiInited = true;
       checkReady();
     } catch(e) {
