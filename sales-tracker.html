@@ -51,8 +51,49 @@
       <h1 class="text-3xl font-bold text-white">Sales WIP Tracker</h1>
       <p class="text-indigo-200 mt-2">Pipeline · Revenue · Forecasting</p>
     </div>
-    <div class="bg-white rounded-2xl shadow-2xl p-8">
-      <p class="text-gray-600 text-sm text-center mb-6">Sign in with Google to access your team's sales data stored securely in Google Sheets.</p>
+    <!-- STEP 1: Credentials (shown when not yet configured) -->
+    <div id="creds-panel" class="bg-white rounded-2xl shadow-2xl p-8">
+      <h2 class="text-base font-bold text-gray-800 mb-1">Connect Your Google Sheet</h2>
+      <p class="text-gray-500 text-xs mb-5">Your credentials are saved in this browser only — never stored in the code or GitHub.</p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">OAuth Client ID</label>
+          <input id="inp-client-id" type="text" placeholder="xxxxx.apps.googleusercontent.com"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">API Key</label>
+          <input id="inp-api-key" type="text" placeholder="AIzaSy..."
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Spreadsheet ID</label>
+          <input id="inp-sheet-id" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono">
+          <p class="text-xs text-gray-400 mt-1">Found in your Google Sheet URL between <code class="bg-gray-100 px-1 rounded">/d/</code> and <code class="bg-gray-100 px-1 rounded">/edit</code></p>
+        </div>
+        <div id="creds-error" class="hidden text-xs text-red-600 bg-red-50 rounded-lg p-2"></div>
+        <button onclick="saveCredentials()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors mt-1">
+          Save &amp; Connect →
+        </button>
+      </div>
+      <details class="mt-5">
+        <summary class="text-xs text-indigo-600 cursor-pointer font-medium hover:text-indigo-800">▶ How to get these values (first-time setup)</summary>
+        <ol class="mt-3 text-xs text-gray-600 space-y-2 list-decimal list-inside leading-relaxed">
+          <li>Go to <strong>console.cloud.google.com</strong> → New Project</li>
+          <li>APIs &amp; Services → Library → Enable <strong>Google Sheets API</strong></li>
+          <li>Credentials → Create <strong>OAuth 2.0 Client ID</strong> (Web Application)<br>
+            Add <code class="bg-gray-100 px-1 rounded">https://mikepizzari.github.io</code> to Authorized Origins</li>
+          <li>Credentials → Create <strong>API Key</strong> → restrict to Sheets API</li>
+          <li>Create a Google Sheet, rename tab 1 to <strong>Deals</strong>, share with your team (Editor)</li>
+          <li>Copy the Sheet ID from the URL and paste above</li>
+        </ol>
+      </details>
+    </div>
+
+    <!-- STEP 2: Sign-in (shown after credentials saved) -->
+    <div id="signin-panel" class="hidden bg-white rounded-2xl shadow-2xl p-8">
+      <p class="text-gray-600 text-sm text-center mb-6">Sign in with Google to access your team's sales data.</p>
       <button id="auth-btn" onclick="handleSignIn()" disabled
         class="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl transition-colors">
         <svg class="w-5 h-5" viewBox="0 0 24 24">
@@ -65,19 +106,7 @@
       </button>
       <p id="auth-status" class="text-center text-xs text-gray-400 mt-2">Loading Google APIs…</p>
       <div id="auth-error" class="hidden mt-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3"></div>
-      <!-- Setup Instructions -->
-      <details class="mt-6">
-        <summary class="text-xs text-indigo-600 cursor-pointer font-medium hover:text-indigo-800">▶ First-time setup instructions</summary>
-        <ol class="mt-3 text-xs text-gray-600 space-y-2 list-decimal list-inside leading-relaxed">
-          <li>Go to <strong>console.cloud.google.com</strong> → New Project (No organization needed)</li>
-          <li>APIs &amp; Services → Library → Enable <strong>Google Sheets API</strong></li>
-          <li>Credentials → Create OAuth 2.0 Client ID (Web App) → add <code class="bg-gray-100 px-1 rounded">null</code> to Authorized Origins</li>
-          <li>Create an <strong>API Key</strong>, restrict it to Sheets API</li>
-          <li>Create a Google Sheet, rename tab 1 to <strong>Deals</strong>, share with team (Editor)</li>
-          <li>Copy Sheet ID from URL (between <code class="bg-gray-100 px-1 rounded">/d/</code> and <code class="bg-gray-100 px-1 rounded">/edit</code>)</li>
-          <li>Open this file in a text editor, find <strong>CONFIG</strong> at top of script, fill in the three values</li>
-        </ol>
-      </details>
+      <button onclick="showCredsPanel()" class="w-full mt-3 text-xs text-gray-400 hover:text-indigo-600 transition-colors">← Edit credentials</button>
     </div>
   </div>
 </div>
@@ -122,6 +151,10 @@
       <button onclick="handleSignOut()" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors rounded-lg text-indigo-200">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
         Sign Out
+      </button>
+      <button onclick="resetCredentials()" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/10 transition-colors rounded-lg text-indigo-300 opacity-60 hover:opacity-100">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Reset Credentials
       </button>
     </div>
   </nav>
@@ -437,14 +470,24 @@
 
 <script>
 // =====================================================================
-// CONFIG — Fill in your values here
+// CONFIG — loaded from localStorage (entered via UI, never hardcoded)
 // =====================================================================
-const CONFIG = {
-  CLIENT_ID: 'YOUR_CLIENT_ID_HERE',
-  API_KEY: 'YOUR_API_KEY_HERE',
-  SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID_HERE',
-  SHEET_NAME: 'Deals'
-};
+function getConfig() {
+  const s = JSON.parse(localStorage.getItem('swt_config') || '{}');
+  return {
+    CLIENT_ID: s.clientId || '',
+    API_KEY: s.apiKey || '',
+    SPREADSHEET_ID: s.spreadsheetId || '',
+    SHEET_NAME: 'Deals'
+  };
+}
+function saveConfig(clientId, apiKey, spreadsheetId) {
+  localStorage.setItem('swt_config', JSON.stringify({ clientId, apiKey, spreadsheetId }));
+}
+function clearConfig() {
+  localStorage.removeItem('swt_config');
+}
+const CONFIG = getConfig();
 
 // =====================================================================
 // STATE
@@ -475,6 +518,55 @@ function showAuthError(msg) {
   document.getElementById('auth-status').className = 'text-center text-xs text-red-500 mt-2';
 }
 
+// =====================================================================
+// CREDENTIALS UI
+// =====================================================================
+function initAuthScreen() {
+  const cfg = getConfig();
+  if (cfg.CLIENT_ID && cfg.API_KEY && cfg.SPREADSHEET_ID) {
+    showSignInPanel();
+  } else {
+    showCredsPanel();
+  }
+}
+
+function showCredsPanel() {
+  document.getElementById('creds-panel').classList.remove('hidden');
+  document.getElementById('signin-panel').classList.add('hidden');
+  // Pre-fill if already have values
+  const cfg = getConfig();
+  if (cfg.CLIENT_ID) document.getElementById('inp-client-id').value = cfg.CLIENT_ID;
+  if (cfg.API_KEY) document.getElementById('inp-api-key').value = cfg.API_KEY;
+  if (cfg.SPREADSHEET_ID) document.getElementById('inp-sheet-id').value = cfg.SPREADSHEET_ID;
+}
+
+function showSignInPanel() {
+  document.getElementById('creds-panel').classList.add('hidden');
+  document.getElementById('signin-panel').classList.remove('hidden');
+}
+
+function saveCredentials() {
+  const clientId = document.getElementById('inp-client-id').value.trim();
+  const apiKey = document.getElementById('inp-api-key').value.trim();
+  const sheetId = document.getElementById('inp-sheet-id').value.trim();
+  const err = document.getElementById('creds-error');
+  if (!clientId || !apiKey || !sheetId) {
+    err.textContent = 'All three fields are required.';
+    err.classList.remove('hidden'); return;
+  }
+  err.classList.add('hidden');
+  saveConfig(clientId, apiKey, sheetId);
+  // Reload page so CONFIG and Google scripts reinitialize with new values
+  location.reload();
+}
+
+function resetCredentials() {
+  if (confirm('Clear saved credentials? You will need to re-enter them.')) {
+    clearConfig();
+    location.reload();
+  }
+}
+
 // Load Google API scripts dynamically — guarantees functions are defined before callbacks fire
 function loadGoogleScripts() {
   const s1 = document.createElement('script');
@@ -489,7 +581,13 @@ function loadGoogleScripts() {
   s2.onerror = () => showAuthError('Failed to load Google Sign-In script (accounts.google.com). Check your network or try disabling browser extensions/ad blockers.');
   document.head.appendChild(s2);
 }
-document.addEventListener('DOMContentLoaded', loadGoogleScripts);
+document.addEventListener('DOMContentLoaded', () => {
+  initAuthScreen();
+  // Only load Google scripts if credentials are configured
+  if (CONFIG.CLIENT_ID && CONFIG.API_KEY && CONFIG.SPREADSHEET_ID) {
+    loadGoogleScripts();
+  }
+});
 
 // Timeout: if not ready in 12s, show a diagnostic
 setTimeout(() => {
